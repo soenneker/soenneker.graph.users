@@ -57,7 +57,7 @@ public class GraphUsersUtil : IGraphUsersUtil
                 new ObjectIdentity
                 {
                     SignInType = "emailAddress",
-                    Issuer = _config.GetValueStrict<string>("Azure:B2C:NonCustomDomain"),
+                    Issuer = _config.GetValueStrict<string>("Azure:AzureAd:NonCustomDomain"),
                     IssuerAssignedId = email
                 }
             ],
@@ -204,7 +204,7 @@ public class GraphUsersUtil : IGraphUsersUtil
         UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken)).Users.GetAsync(requestConfiguration =>
         {
             requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
-            requestConfiguration.QueryParameters.Filter = $"identities/any(c:c/issuerAssignedId eq '{email}' and c/issuer eq '{_config.GetValueStrict<string>("Azure:B2C:Domain")}')";
+            requestConfiguration.QueryParameters.Filter = $"identities/any(c:c/issuerAssignedId eq '{email}' and c/issuer eq '{_config.GetValueStrict<string>("Azure:AzureAd:Domain")}')";
         }, cancellationToken);
 
         if (getUserResponse == null || getUserResponse.Value.IsNullOrEmpty())
