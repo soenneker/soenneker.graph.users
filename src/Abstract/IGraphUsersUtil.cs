@@ -1,4 +1,5 @@
-﻿using Microsoft.Graph.Models;
+﻿using System;
+using Microsoft.Graph.Models;
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.Threading;
@@ -24,6 +25,17 @@ public interface IGraphUsersUtil
     /// <returns>The created user.</returns>
     ValueTask<User> Create(string firstName, string lastName, string role, string email, string password, bool forceChangePassword = false,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates an existing user in Microsoft Graph using the provided <see cref="User"/> object.
+    /// </summary>
+    /// <param name="user">The <see cref="User"/> entity to update. The <c>Id</c> property must be populated.</param>
+    /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the operation.</param>
+    /// <returns>The updated <see cref="User"/> if successful; otherwise, <c>null</c> if the update fails.</returns>
+    /// <exception cref="ArgumentException">Thrown if <paramref name="user"/> does not have a valid <c>Id</c>.</exception>
+    /// <exception cref="Microsoft.Graph.Models.ODataErrors.ODataError">Thrown if Microsoft Graph returns an error during the update.</exception>
+    /// <exception cref="Exception">Thrown if an unexpected error occurs during the update.</exception>
+    ValueTask<User?> Update(User user, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Retrieves a user by ID.

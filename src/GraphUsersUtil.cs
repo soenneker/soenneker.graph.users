@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
@@ -13,10 +8,17 @@ using Soenneker.Exceptions.Suite;
 using Soenneker.Extensions.Configuration;
 using Soenneker.Extensions.Enumerable;
 using Soenneker.Extensions.String;
+using Soenneker.Extensions.Task;
+using Soenneker.Extensions.ValueTask;
 using Soenneker.Graph.Client.Abstract;
 using Soenneker.Graph.Users.Abstract;
 using Soenneker.Utils.BackgroundQueue.Abstract;
 using Soenneker.Utils.Random;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Soenneker.Graph.Users;
 
@@ -69,8 +71,12 @@ public class GraphUsersUtil : IGraphUsersUtil
 
         try
         {
-            result = await (await _graphClientUtil.Get(cancellationToken)).Users.PostAsync(user,
-                requestConfiguration => { requestConfiguration.Headers.Add("ConsistencyLevel", "eventual"); }, cancellationToken);
+            result = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.PostAsync(user,
+                                                                                       requestConfiguration =>
+                                                                                       {
+                                                                                           requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
+                                                                                       }, cancellationToken)
+                                                                                   .NoSync();
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError e)
         {
@@ -90,12 +96,47 @@ public class GraphUsersUtil : IGraphUsersUtil
         if (result.Id.IsNullOrEmpty())
             throw new Exception($"^^ GRAPHUSERUTIL: User ID not returned after creation: {email}");
 
-        User? newUser = await Get(result.Id, cancellationToken);
+        User? newUser = await Get(result.Id, cancellationToken).NoSync();
 
         if (newUser == null)
             throw new Exception($"^^ GRAPHUSERUTIL: Unable to retrieve AAD user after creation: {email}");
 
         return newUser;
+    }
+
+    public async ValueTask<User?> Update(User user, CancellationToken cancellationToken = default)
+    {
+        if (user.Id.IsNullOrEmpty())
+            throw new ArgumentException("^^ GRAPHUSERUTIL: User ID must be populated to perform update", nameof(user));
+
+        _logger.LogDebug("^^ GRAPHUSERUTIL: Updating user ({id}) ...", user.Id);
+
+        try
+        {
+            User? updatedUser = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users[user.Id]
+                                                                                              .PatchAsync(user,
+                                                                                                  requestConfiguration =>
+                                                                                                  {
+                                                                                                      requestConfiguration.Headers.Add("ConsistencyLevel",
+                                                                                                          "eventual");
+                                                                                                  }, cancellationToken)
+                                                                                              .NoSync();
+
+            _logger.LogDebug("^^ GRAPHUSERUTIL: Successfully updated user ({id})", user.Id);
+
+            return updatedUser;
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError e)
+        {
+            string? reason = e.Error?.Message;
+            _logger.LogError(e, "^^ GRAPHUSERUTIL: Failed to update user ({id}): {reason}", user.Id, reason);
+            throw;
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "^^ GRAPHUSERUTIL: Unexpected error updating user ({id})", user.Id);
+            throw;
+        }
     }
 
     public async ValueTask<User?> Get(string id, CancellationToken cancellationToken = default)
@@ -115,7 +156,7 @@ public class GraphUsersUtil : IGraphUsersUtil
                                                               timespan.Seconds, retryCount);
                                                       });
 
-            await retryPolicy.ExecuteAsync(async () => { user = await InternalGet(id, cancellationToken); });
+            await retryPolicy.ExecuteAsync(async () => { user = await InternalGet(id, cancellationToken).NoSync(); }).NoSync();
         }
         catch (Exception e)
         {
@@ -132,16 +173,18 @@ public class GraphUsersUtil : IGraphUsersUtil
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({id}) ...", id);
 
-        User? user = await (await _graphClientUtil.Get(cancellationToken)).Users[id]
-                                                                          .GetAsync(requestConfiguration =>
-                                                                          {
-                                                                              requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-                                                                              requestConfiguration.QueryParameters.Select =
-                                                                              [
-                                                                                  "id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName",
-                                                                                  "surname"
-                                                                              ];
-                                                                          }, cancellationToken);
+        User? user = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users[id]
+                                                                                   .GetAsync(requestConfiguration =>
+                                                                                   {
+                                                                                       requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
+                                                                                       requestConfiguration.QueryParameters.Select =
+                                                                                       [
+                                                                                           "id", "displayName", "createdDateTime", "identities", "jobTitle",
+                                                                                           "givenName",
+                                                                                           "surname"
+                                                                                       ];
+                                                                                   }, cancellationToken)
+                                                                                   .NoSync();
 
         return user;
     }
@@ -150,24 +193,25 @@ public class GraphUsersUtil : IGraphUsersUtil
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving all users...");
 
-        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken)).Users.GetAsync(requestConfiguration =>
-        {
-            requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-            requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
-        }, cancellationToken);
+        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.GetAsync(requestConfiguration =>
+            {
+                requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
+                requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
+            }, cancellationToken)
+            .NoSync();
 
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved {count} users", getUserResponse!.Value!.Count);
 
         var users = new List<User>();
 
-        PageIterator<User, UserCollectionResponse>? pageIterator = PageIterator<User, UserCollectionResponse>.CreatePageIterator(await _graphClientUtil.Get(),
-            getUserResponse, user =>
+        PageIterator<User, UserCollectionResponse>? pageIterator = PageIterator<User, UserCollectionResponse>.CreatePageIterator(
+            await _graphClientUtil.Get(cancellationToken).NoSync(), getUserResponse, user =>
             {
                 users.Add(user);
                 return true;
             });
 
-        await pageIterator.IterateAsync(cancellationToken);
+        await pageIterator.IterateAsync(cancellationToken).NoSync();
 
         _logger.LogDebug("^^ GRAPHUSERUTIL: Finished retrieving {count} total users", getUserResponse.Value.Count);
 
@@ -178,12 +222,13 @@ public class GraphUsersUtil : IGraphUsersUtil
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving first user...");
 
-        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken)).Users.GetAsync(requestConfiguration =>
-        {
-            requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-            requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
-            requestConfiguration.QueryParameters.Top = 1;
-        }, cancellationToken);
+        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.GetAsync(requestConfiguration =>
+            {
+                requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
+                requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
+                requestConfiguration.QueryParameters.Top = 1;
+            }, cancellationToken)
+            .NoSync();
 
         if (getUserResponse == null || getUserResponse.Value.IsNullOrEmpty())
         {
@@ -201,11 +246,13 @@ public class GraphUsersUtil : IGraphUsersUtil
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({email}) ...", email);
 
-        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken)).Users.GetAsync(requestConfiguration =>
-        {
-            requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
-            requestConfiguration.QueryParameters.Filter = $"identities/any(c:c/issuerAssignedId eq '{email}' and c/issuer eq '{_config.GetValueStrict<string>("Azure:AzureAd:Domain")}')";
-        }, cancellationToken);
+        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.GetAsync(requestConfiguration =>
+            {
+                requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
+                requestConfiguration.QueryParameters.Filter =
+                    $"identities/any(c:c/issuerAssignedId eq '{email}' and c/issuer eq '{_config.GetValueStrict<string>("Azure:AzureAd:Domain")}')";
+            }, cancellationToken)
+            .NoSync();
 
         if (getUserResponse == null || getUserResponse.Value.IsNullOrEmpty())
         {
@@ -230,7 +277,8 @@ public class GraphUsersUtil : IGraphUsersUtil
 
         _logger.LogInformation("^^ GRAPHUSERUTIL: Deleting user ({id}) ...", id);
 
-        await _backgroundQueue.QueueTask(async ct => { await (await _graphClientUtil.Get(ct)).Users[id].DeleteAsync(null, ct); }, cancellationToken);
+        await _backgroundQueue.QueueTask(async ct => { await (await _graphClientUtil.Get(ct).NoSync()).Users[id].DeleteAsync(null, ct); }, cancellationToken)
+                              .NoSync();
 
         _logger.LogDebug("^^ GRAPHUSERUTIL: Deleted user ({id})", id);
     }
