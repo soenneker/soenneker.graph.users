@@ -145,7 +145,7 @@ public class GraphUsersUtil : IGraphUsersUtil
 
         try
         {
-            AsyncRetryPolicy? retryPolicy = Policy.Handle<Exception>()
+            AsyncRetryPolicy? retryPolicy = Policy.Handle<Exception>(ex => ex is not OperationCanceledException)
                                                   .WaitAndRetryAsync(3, retryAttempt =>
                                                           TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) // exponential back-off with jitter
                                                           + TimeSpan.FromMilliseconds(RandomUtil.Next(0, 500)),
