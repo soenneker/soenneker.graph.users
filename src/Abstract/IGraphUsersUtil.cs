@@ -23,7 +23,7 @@ public interface IGraphUsersUtil
     /// <param name="forceChangePassword">Indicates if the user must change the password on first login.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The created user.</returns>
-    ValueTask<User> Create(string firstName, string lastName, string role, string email, string password, bool forceChangePassword = false,
+    ValueTask<User> Create(string firstName, string lastName, string? role, string email, string password, bool forceChangePassword = false,
         CancellationToken cancellationToken = default);
 
     /// <summary>

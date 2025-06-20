@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 namespace Soenneker.Graph.Users;
 
 ///<inheritdoc cref="IGraphUsersUtil"/>
-public class GraphUsersUtil : IGraphUsersUtil
+public sealed class GraphUsersUtil : IGraphUsersUtil
 {
     private readonly IConfiguration _config;
     private readonly ILogger<GraphUsersUtil> _logger;
@@ -38,7 +38,7 @@ public class GraphUsersUtil : IGraphUsersUtil
         _graphClientUtil = graphClientUtil;
     }
 
-    public async ValueTask<User> Create(string firstName, string lastName, string role, string email, string password, bool forceChangePassword = false,
+    public async ValueTask<User> Create(string firstName, string lastName, string? role, string email, string password, bool forceChangePassword = false,
         CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Creating user {email} ...", email);
