@@ -30,6 +30,22 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
     private readonly IBackgroundQueue _backgroundQueue;
     private readonly IGraphClientUtil _graphClientUtil;
 
+    private static readonly string[] _commonSelect =
+    [
+        "id", "displayName", "createdDateTime",
+        "identities",
+        "givenName", "surname", "jobTitle",
+        "mail",
+        "otherMails",
+        "userPrincipalName"
+    ];
+
+    private static readonly AsyncRetryPolicy _retry = Policy.Handle<Exception>(ex => ex is not OperationCanceledException)
+                                                            .WaitAndRetryAsync(retryCount: 3,
+                                                                sleepDurationProvider: attempt =>
+                                                                    TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
+                                                                    TimeSpan.FromMilliseconds(RandomUtil.Next(0, 500)));
+
     public GraphUsersUtil(IConfiguration config, ILogger<GraphUsersUtil> logger, IBackgroundQueue backgroundQueue, IGraphClientUtil graphClientUtil)
     {
         _config = config;
@@ -71,11 +87,11 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         try
         {
-            result = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.PostAsync(user,
-                                                                                       requestConfiguration =>
-                                                                                       {
-                                                                                           requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-                                                                                       }, cancellationToken)
+            result = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.PostAsync(user, requestConfiguration =>
+                                                                                   {
+                                                                                       requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
+                                                                                       requestConfiguration.Headers.Add("Prefer", "return=representation");
+                                                                                   }, cancellationToken)
                                                                                    .NoSync();
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError e)
@@ -91,17 +107,7 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
             throw;
         }
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Created user ({email}), it has ID {id}", email, result!.Id);
-
-        if (result.Id.IsNullOrEmpty())
-            throw new Exception($"^^ GRAPHUSERUTIL: User ID not returned after creation: {email}");
-
-        User? newUser = await Get(result.Id, cancellationToken).NoSync();
-
-        if (newUser == null)
-            throw new Exception($"^^ GRAPHUSERUTIL: Unable to retrieve AAD user after creation: {email}");
-
-        return newUser;
+        return result;
     }
 
     public async ValueTask<User?> Update(User user, CancellationToken cancellationToken = default)
@@ -141,22 +147,11 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
     public async ValueTask<User?> Get(string id, CancellationToken cancellationToken = default)
     {
-        User? user = null;
+        User? user;
 
         try
         {
-            AsyncRetryPolicy? retryPolicy = Policy.Handle<Exception>(ex => ex is not OperationCanceledException)
-                                                  .WaitAndRetryAsync(3, retryAttempt =>
-                                                          TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)) // exponential back-off with jitter
-                                                          + TimeSpan.FromMilliseconds(RandomUtil.Next(0, 500)),
-                                                      (exception, timespan, retryCount) =>
-                                                      {
-                                                          _logger.LogError(exception,
-                                                              "^^ GRAPHUSERUTIL: Failed to retrieve Graph user, waiting for eventuality {delay}s ... count: {retryCount}",
-                                                              timespan.Seconds, retryCount);
-                                                      });
-
-            await retryPolicy.ExecuteAsync(async () => { user = await InternalGet(id, cancellationToken).NoSync(); }).NoSync();
+            user = await _retry.ExecuteAsync(async () => await InternalGet(id, cancellationToken).NoSync()).NoSync();
         }
         catch (Exception e)
         {
@@ -177,12 +172,7 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
                                                                                    .GetAsync(requestConfiguration =>
                                                                                    {
                                                                                        requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-                                                                                       requestConfiguration.QueryParameters.Select =
-                                                                                       [
-                                                                                           "id", "displayName", "createdDateTime", "identities", "jobTitle",
-                                                                                           "givenName",
-                                                                                           "surname"
-                                                                                       ];
+                                                                                       requestConfiguration.QueryParameters.Select = _commonSelect;
                                                                                    }, cancellationToken)
                                                                                    .NoSync();
 
@@ -193,19 +183,24 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving all users...");
 
-        UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.GetAsync(requestConfiguration =>
-            {
-                requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-                requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
-            }, cancellationToken)
-            .NoSync();
+        GraphServiceClient graphClient = await _graphClientUtil.Get(cancellationToken).NoSync();
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved {count} users", getUserResponse!.Value!.Count);
+        UserCollectionResponse? firstPage = await graphClient.Users.GetAsync(requestConfiguration =>
+                                                             {
+                                                                 requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
+                                                                 requestConfiguration.QueryParameters.Select = _commonSelect;
+                                                             }, cancellationToken)
+                                                             .NoSync();
 
-        var users = new List<User>();
+        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved {count} users", firstPage!.Value!.Count);
+
+        if (firstPage.Value == null)
+            return [];
+
+        var users = new List<User>(firstPage.Value.Count);
 
         PageIterator<User, UserCollectionResponse>? pageIterator = PageIterator<User, UserCollectionResponse>.CreatePageIterator(
-            await _graphClientUtil.Get(cancellationToken).NoSync(), getUserResponse, user =>
+            await _graphClientUtil.Get(cancellationToken).NoSync(), firstPage, user =>
             {
                 users.Add(user);
                 return true;
@@ -213,7 +208,7 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         await pageIterator.IterateAsync(cancellationToken).NoSync();
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Finished retrieving {count} total users", getUserResponse.Value.Count);
+        _logger.LogDebug("^^ GRAPHUSERUTIL: Finished retrieving {count} total users", firstPage.Value.Count);
 
         return users;
     }
@@ -225,7 +220,7 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
         UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.GetAsync(requestConfiguration =>
             {
                 requestConfiguration.Headers.Add("ConsistencyLevel", "eventual");
-                requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
+                requestConfiguration.QueryParameters.Select = _commonSelect;
                 requestConfiguration.QueryParameters.Top = 1;
             }, cancellationToken)
             .NoSync();
@@ -248,9 +243,9 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken).NoSync()).Users.GetAsync(requestConfiguration =>
             {
-                requestConfiguration.QueryParameters.Select = ["id", "displayName", "createdDateTime", "identities", "jobTitle", "givenName", "surname"];
+                requestConfiguration.QueryParameters.Select = _commonSelect;
                 requestConfiguration.QueryParameters.Filter =
-                    $"identities/any(c:c/issuerAssignedId eq '{email}' and c/issuer eq '{_config.GetValueStrict<string>("Azure:AzureAd:Domain")}')";
+                    $"mail eq '{email}' " + $"or userPrincipalName eq '{email}' " + $"or identities/any(c:c/issuerAssignedId eq '{email}')";
             }, cancellationToken)
             .NoSync();
 
@@ -277,7 +272,8 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         _logger.LogInformation("^^ GRAPHUSERUTIL: Deleting user ({id}) ...", id);
 
-        await _backgroundQueue.QueueTask(async ct => { await (await _graphClientUtil.Get(ct).NoSync()).Users[id].DeleteAsync(null, ct); }, cancellationToken)
+        await _backgroundQueue.QueueTask(async ct => { await (await _graphClientUtil.Get(ct).NoSync()).Users[id].DeleteAsync(null, ct).NoSync(); },
+                                  cancellationToken)
                               .NoSync();
 
         _logger.LogDebug("^^ GRAPHUSERUTIL: Deleted user ({id})", id);
