@@ -42,7 +42,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="Polly" Version="8.6.3" />
+        <PackageReference Include="Polly" Version="8.6.4" />
         <PackageReference Include="Soenneker.Exceptions.Suite" Version="3.0.670" />        
         <PackageReference Include="Soenneker.Extensions.Enumerable" Version="3.0.566" />
         <PackageReference Include="Soenneker.Graph.Client" Version="3.0.1499" />
