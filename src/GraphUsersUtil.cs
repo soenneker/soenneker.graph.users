@@ -296,10 +296,10 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         _logger.LogInformation("^^ GRAPHUSERUTIL: Deleting user ({id}) ...", id);
 
-        await _backgroundQueue.QueueTask(async ct =>
+        await _backgroundQueue.QueueTask((util: _graphClientUtil, userId: id), static async (s, ct) =>
                               {
-                                  await (await _graphClientUtil.Get(ct)
-                                                               .NoSync()).Users[id]
+                                  await (await s.util.Get(ct)
+                                                               .NoSync()).Users[s.userId]
                                                                          .DeleteAsync(null, ct)
                                                                          .NoSync();
                               }, cancellationToken)
