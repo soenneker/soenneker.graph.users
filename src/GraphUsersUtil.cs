@@ -58,13 +58,13 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
     {
         if (firstName.IsNullOrEmpty())
             throw new ArgumentException("^^ GRAPHUSERUTIL: First name cannot be null or empty", nameof(firstName));
-        
+
         if (lastName.IsNullOrEmpty())
             throw new ArgumentException("^^ GRAPHUSERUTIL: Last name cannot be null or empty", nameof(lastName));
-        
+
         if (email.IsNullOrEmpty())
             throw new ArgumentException("^^ GRAPHUSERUTIL: Email cannot be null or empty", nameof(email));
-        
+
         if (password.IsNullOrEmpty())
             throw new ArgumentException("^^ GRAPHUSERUTIL: Password cannot be null or empty", nameof(password));
 
@@ -296,15 +296,15 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         _logger.LogInformation("^^ GRAPHUSERUTIL: Deleting user ({id}) ...", id);
 
-        await _backgroundQueue.QueueTask((util: _graphClientUtil, userId: id), static async (s, ct) =>
+        await _backgroundQueue.QueueTask((util: _graphClientUtil, userId: id, logger: _logger), static async (s, ct) =>
                               {
                                   await (await s.util.Get(ct)
-                                                               .NoSync()).Users[s.userId]
-                                                                         .DeleteAsync(null, ct)
-                                                                         .NoSync();
+                                                .NoSync()).Users[s.userId]
+                                                          .DeleteAsync(null, ct)
+                                                          .NoSync();
+
+                                  s.logger.LogDebug("^^ GRAPHUSERUTIL: Deleted user ({id})", s.userId);
                               }, cancellationToken)
                               .NoSync();
-
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Deleted user ({id})", id);
     }
 }
