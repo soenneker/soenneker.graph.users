@@ -46,7 +46,7 @@
     <ItemGroup>
         <PackageReference Include="Polly" Version="8.6.6" />
         <PackageReference Include="Soenneker.Exceptions.Suite" Version="4.0.680" />        
-        <PackageReference Include="Soenneker.Extensions.Enumerable" Version="4.0.611" />
+        <PackageReference Include="Soenneker.Extensions.Enumerable" Version="4.0.612" />
         <PackageReference Include="Soenneker.Graph.Client" Version="4.0.1622" />
         <PackageReference Include="Soenneker.Utils.BackgroundQueue" Version="4.0.2332" />
     </ItemGroup>
