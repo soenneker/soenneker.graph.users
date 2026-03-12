@@ -27,7 +27,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\Soenneker.Graph.Users.csproj" />
+        <ProjectReference Include="..\..\src\Soenneker.Graph.Users\Soenneker.Graph.Users.csproj" />
     </ItemGroup>
 
     <ItemGroup>
