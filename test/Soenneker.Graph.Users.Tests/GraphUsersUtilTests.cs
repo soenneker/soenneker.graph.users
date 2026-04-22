@@ -1,20 +1,19 @@
-﻿using Soenneker.Graph.Users.Abstract;
-using Soenneker.Tests.FixturedUnit;
-using Xunit;
+using Soenneker.Graph.Users.Abstract;
+using Soenneker.Tests.HostedUnit;
 
 namespace Soenneker.Graph.Users.Tests;
 
-[Collection("Collection")]
-public class GraphUsersUtilTests : FixturedUnitTest
+[ClassDataSource<Host>(Shared = SharedType.PerTestSession)]
+public class GraphUsersUtilTests : HostedUnitTest
 {
     private readonly IGraphUsersUtil _util;
 
-    public GraphUsersUtilTests(Fixture fixture, ITestOutputHelper output) : base(fixture, output)
+    public GraphUsersUtilTests(Host host) : base(host)
     {
         _util = Resolve<IGraphUsersUtil>(true);
     }
 
-    [Fact]
+    [Test]
     public void Default()
     {
 
