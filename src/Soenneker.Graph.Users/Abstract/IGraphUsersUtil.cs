@@ -74,8 +74,9 @@ public interface IGraphUsersUtil
     /// <summary>
     /// Deletes a user by ID.
     /// </summary>
-    /// <param name="id">The unique ID of the user.</param>
+    /// <param name="id">Identifier of the graph users instance or registration to target.</param>
     /// <param name="skipValidation">Indicates whether to skip validation before deletion.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="cancellationToken">Token used to cancel the operation.</param>
+    /// <returns>A task that completes after the targeted files have been deleted.</returns>
     ValueTask Delete(string id, bool skipValidation = false, CancellationToken cancellationToken = default);
 }

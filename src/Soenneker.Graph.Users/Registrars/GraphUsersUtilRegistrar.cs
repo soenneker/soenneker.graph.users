@@ -14,6 +14,8 @@ public static class GraphUsersUtilRegistrar
     /// <summary>
     /// Adds <see cref="IGraphUsersUtil"/> as a singleton service. <para/>
     /// </summary>
+    /// <param name="services">Service collection that receives the registration.</param>
+    /// <returns>The same service collection, so additional registrations can be chained.</returns>
     public static IServiceCollection AddGraphUsersUtilAsSingleton(this IServiceCollection services)
     {
         services.AddBackgroundQueueAsSingleton().AddGraphClientUtilAsSingleton().TryAddSingleton<IGraphUsersUtil, GraphUsersUtil>();
@@ -24,6 +26,8 @@ public static class GraphUsersUtilRegistrar
     /// <summary>
     /// Adds <see cref="IGraphUsersUtil"/> as a scoped service. <para/>
     /// </summary>
+    /// <param name="services">Service collection that receives the registration.</param>
+    /// <returns>The same service collection, so additional registrations can be chained.</returns>
     public static IServiceCollection AddGraphUsersUtilAsScoped(this IServiceCollection services)
     {
         services.AddBackgroundQueueAsSingleton().AddGraphClientUtilAsSingleton().TryAddScoped<IGraphUsersUtil, GraphUsersUtil>();
