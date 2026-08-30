@@ -22,7 +22,6 @@ using System.Threading.Tasks;
 
 namespace Soenneker.Graph.Users;
 
-/// <inheritdoc cref="IGraphUsersUtil"/>
 public sealed class GraphUsersUtil : IGraphUsersUtil
 {
     private readonly IConfiguration _config;
@@ -40,7 +39,9 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
         "userPrincipalName"
     ];
 
-    private static readonly AsyncRetryPolicy _retry = Policy.Handle<Exception>(ex => ex is not OperationCanceledException)
+    private static readonly AsyncRetryPolicy _retry = Policy.Handle<Exception>(ex =>
+                                                                    ex is not OperationCanceledException &&
+                                                                    ex is not Microsoft.Graph.Models.ODataErrors.ODataError { ResponseStatusCode: 404 })
                                                             .WaitAndRetryAsync(retryCount: 3,
                                                                 sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
                                                                                                   TimeSpan.FromMilliseconds(RandomUtil.Next(0, 500)));
@@ -170,11 +171,15 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
                                    .NoSync())
                                .NoSync();
         }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError e) when (e.ResponseStatusCode == 404)
+        {
+            _logger.LogDebug("^^ GRAPHUSERUTIL: User ({id}) was not found", id);
+            return null;
+        }
         catch (Exception e)
         {
             _logger.LogError(e, "^^ GRAPHUSERUTIL: Final error. Could not retrieve AAD user: {reason}", e.Message);
-
-            return null;
+            throw;
         }
 
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved user ({id})", id);
@@ -211,10 +216,10 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
                                                              }, cancellationToken)
                                                              .NoSync();
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved {count} users", firstPage!.Value!.Count);
-
-        if (firstPage.Value == null)
+        if (firstPage?.Value == null)
             return [];
+
+        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved {count} users", firstPage.Value.Count);
 
         var users = new List<User>(firstPage.Value.Count);
 
@@ -229,7 +234,7 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
         await pageIterator.IterateAsync(cancellationToken)
                           .NoSync();
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Finished retrieving {count} total users", firstPage.Value.Count);
+        _logger.LogDebug("^^ GRAPHUSERUTIL: Finished retrieving {count} total users", users.Count);
 
         return users;
     }
@@ -262,14 +267,15 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
     public async ValueTask<User?> GetByEmail(string email, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({email}) ...", email);
+        string escapedEmail = email.Replace("'", "''", StringComparison.Ordinal);
 
         UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken)
                                                                                .NoSync()).Users.GetAsync(requestConfiguration =>
                                                                                          {
                                                                                              requestConfiguration.QueryParameters.Select = _commonSelect;
                                                                                              requestConfiguration.QueryParameters.Filter =
-                                                                                                 $"mail eq '{email}' " + $"or userPrincipalName eq '{email}' " +
-                                                                                                 $"or identities/any(c:c/issuerAssignedId eq '{email}')";
+                                                                                                 $"mail eq '{escapedEmail}' " + $"or userPrincipalName eq '{escapedEmail}' " +
+                                                                                                 $"or identities/any(c:c/issuerAssignedId eq '{escapedEmail}')";
                                                                                          }, cancellationToken)
                                                                                          .NoSync();
 
@@ -286,12 +292,12 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
     public async ValueTask Delete(string id, bool skipValidation = false, CancellationToken cancellationToken = default)
     {
-        if (skipValidation)
+        if (!skipValidation)
         {
             User? user = await Get(id, cancellationToken);
 
             if (user == null)
-                throw new EntityNotFoundException("User ({id}) does not exist, cannot delete");
+                throw new EntityNotFoundException($"User ({id}) does not exist, cannot delete");
         }
 
         _logger.LogInformation("^^ GRAPHUSERUTIL: Deleting user ({id}) ...", id);

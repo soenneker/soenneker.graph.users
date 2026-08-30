@@ -7,7 +7,7 @@ using Soenneker.Utils.BackgroundQueue.Registrars;
 namespace Soenneker.Graph.Users.Registrars;
 
 /// <summary>
-/// A utility library for Graph User related operations
+/// Registers Graph user operations over the application-wide Graph client and background queue.
 /// </summary>
 public static class GraphUsersUtilRegistrar
 {

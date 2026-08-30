@@ -1,11 +1,12 @@
 [![](https://img.shields.io/nuget/v/soenneker.graph.users.svg?style=for-the-badge)](https://www.nuget.org/packages/soenneker.graph.users/)
+[![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.graph.users/build-and-test.yml?style=for-the-badge)](https://github.com/soenneker/soenneker.graph.users/actions/workflows/build-and-test.yml)
 [![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.graph.users/publish-package.yml?style=for-the-badge)](https://github.com/soenneker/soenneker.graph.users/actions/workflows/publish-package.yml)
 [![](https://img.shields.io/nuget/dt/soenneker.graph.users.svg?style=for-the-badge)](https://www.nuget.org/packages/soenneker.graph.users/)
 [![](https://img.shields.io/github/actions/workflow/status/soenneker/soenneker.graph.users/codeql.yml?label=CodeQL&style=for-the-badge)](https://github.com/soenneker/soenneker.graph.users/actions/workflows/codeql.yml)
 
 # Soenneker.Graph.Users
 
-A utility library for Graph User related operations.
+Creates, updates, queries, pages through, and queues deletion of Microsoft Graph users using an application-authenticated client.
 
 ## Install
 
@@ -13,41 +14,80 @@ A utility library for Graph User related operations.
 dotnet add package Soenneker.Graph.Users
 ```
 
-## Quick start
+## Configuration
+
+```json
+{
+  "Azure": {
+    "AzureAd": {
+      "TenantId": "<tenant ID>",
+      "ClientId": "<application client ID>",
+      "ClientSecret": "<client secret>",
+      "NonCustomDomain": "contoso.onmicrosoft.com"
+    }
+  }
+}
+```
+
+The app registration must have application permissions that allow the user operations your application calls.
+
+## Register
 
 ```csharp
 using Soenneker.Graph.Users.Registrars;
 using Microsoft.Extensions.DependencyInjection;
 
-var services = new ServiceCollection();
-var result = services.AddGraphUsersUtilAsSingleton();
+services.AddGraphUsersUtilAsScoped();
 ```
 
-Adds `IGraphUsersUtil` as a singleton service.
+This deliberately makes `IGraphUsersUtil` scoped while keeping `IGraphClientUtil` and the background queue singleton. A utility scope can be destroyed without tearing down the authenticated Graph client or queued work.
 
-## What you get
+`AddGraphUsersUtilAsSingleton()` is available when the user-operation wrapper should also be application-wide.
 
-- `IGraphUsersUtil` — A utility library for Graph User related operations.
-- `GraphUsersUtilRegistrar` — A utility library for Graph User related operations.
+## Create and query users
+
+```csharp
+User created = await graphUsers.Create(
+    firstName: "Ada",
+    lastName: "Lovelace",
+    role: "Engineer",
+    email: "ada@example.com",
+    password: initialPassword,
+    forceChangePassword: true,
+    cancellationToken);
+
+User? byEmail = await graphUsers.GetByEmail(
+    "ada@example.com",
+    cancellationToken);
+
+List<User> allUsers = await graphUsers.GetAll(cancellationToken);
+```
+
+Created users receive an `emailAddress` identity issued by `Azure:AzureAd:NonCustomDomain`, and password expiration is disabled on the created account. `GetAll()` follows every Graph page rather than returning only the first page.
+
+## Update and delete
+
+```csharp
+created.JobTitle = "Principal Engineer";
+User? updated = await graphUsers.Update(created, cancellationToken);
+
+await graphUsers.Delete(created.Id!, cancellationToken: cancellationToken);
+```
+
+`Update()` requires `User.Id`; Graph errors propagate. A `null` update result means Graph returned no response body, not that an error was swallowed.
+
+`Delete()` validates that the user exists by default and then enqueues the deletion. It returns after the work is accepted by the background queue, not after Graph confirms deletion. Set `skipValidation: true` to omit the preliminary lookup.
 
 ## API at a glance
 
 | API | What it does | Result / important behavior |
 | --- | --- | --- |
-| `IGraphUsersUtil.Create(firstName, lastName, role, email, password, forceChangePassword, cancellationToken)` | Creates a new user in Microsoft Graph. | The created user. |
-| `IGraphUsersUtil.Update(user, cancellationToken)` | Updates an existing user in Microsoft Graph using the provided `User` object. | The updated `User` if successful; otherwise, `null` if the update fails. |
-| `IGraphUsersUtil.Get(id, cancellationToken)` | Retrieves a user by ID. | The user if found; otherwise, null. |
-| `IGraphUsersUtil.GetAll(cancellationToken)` | Retrieves all users from Microsoft Graph. | A list of users. |
-| `IGraphUsersUtil.GetFirst(cancellationToken)` | Retrieves the first user from Microsoft Graph. | The first user if available; otherwise, null. |
-| `IGraphUsersUtil.GetByEmail(email, cancellationToken)` | Retrieves a user by email address. | The user if found; otherwise, null. |
-| `IGraphUsersUtil.Delete(id, skipValidation, cancellationToken)` | Deletes a user by ID. | Completes when the requested deletion has finished. |
-| `GraphUsersUtilRegistrar.AddGraphUsersUtilAsSingleton(services)` | Adds `IGraphUsersUtil` as a singleton service. | The same service collection, so additional registrations can be chained. |
-| `GraphUsersUtilRegistrar.AddGraphUsersUtilAsScoped(services)` | Adds `IGraphUsersUtil` as a scoped service. | The same service collection, so additional registrations can be chained. |
+| `Create(...)` | Creates an enabled local account. | Returns the Graph representation or throws when Graph supplies none. |
+| `Update(user)` | Patches the user identified by `user.Id`. | Returns Graph's response body, which may be `null`. |
+| `Get(id)` | Retrieves one user with the common identity fields selected. | `null` only for a not-found response; other failures propagate. |
+| `GetAll()` | Retrieves all users and follows pagination. | Returns an empty list when Graph supplies no collection. |
+| `GetFirst()` | Requests one user. | Graph ordering is not defined by this package. |
+| `GetByEmail(email)` | Filters mail, user principal name, and identity issuer-assigned ID. | Returns the first match or `null`. |
+| `Delete(id, skipValidation)` | Optionally validates, then queues deletion. | Completion means queued, not deleted. |
 
-## Important behavior
-
-- `IGraphUsersUtil.Update(user, cancellationToken)`: Thrown if `user` does not have a valid `Id`. Thrown if Microsoft Graph returns an error during the update. Thrown if an unexpected error occurs during the update.
-
-## Practical notes
-
-- Cancellation stops pending work; it does not undo work that has already completed.
+Cancellation is forwarded to Graph requests and queue submission. It does not recall deletion work that has already begun in the background queue.

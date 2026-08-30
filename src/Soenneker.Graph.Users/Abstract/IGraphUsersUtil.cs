@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace Soenneker.Graph.Users.Abstract;
 
 /// <summary>
-/// A utility library for Graph User related operations
+/// Provides Microsoft Graph user creation, update, lookup, paging, and queued deletion operations.
 /// </summary>
 public interface IGraphUsersUtil
 {
@@ -31,7 +31,7 @@ public interface IGraphUsersUtil
     /// </summary>
     /// <param name="user">The <see cref="User"/> entity to update. The <c>Id</c> property must be populated.</param>
     /// <param name="cancellationToken">An optional <see cref="CancellationToken"/> to cancel the operation.</param>
-    /// <returns>The updated <see cref="User"/> if successful; otherwise, <c>null</c> if the update fails.</returns>
+    /// <returns>Graph's updated representation, or <see langword="null"/> when the response has no body.</returns>
     /// <exception cref="ArgumentException">Thrown if <paramref name="user"/> does not have a valid <c>Id</c>.</exception>
     /// <exception cref="Microsoft.Graph.Models.ODataErrors.ODataError">Thrown if Microsoft Graph returns an error during the update.</exception>
     /// <exception cref="Exception">Thrown if an unexpected error occurs during the update.</exception>
@@ -42,7 +42,7 @@ public interface IGraphUsersUtil
     /// </summary>
     /// <param name="id">The unique ID of the user.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The user if found; otherwise, null.</returns>
+    /// <returns>The user when found; otherwise, <see langword="null"/>. Non-not-found failures propagate.</returns>
     [Pure]
     ValueTask<User?> Get(string id, CancellationToken cancellationToken = default);
 
@@ -75,8 +75,8 @@ public interface IGraphUsersUtil
     /// Deletes a user by ID.
     /// </summary>
     /// <param name="id">Identifier of the graph users instance or registration to target.</param>
-    /// <param name="skipValidation">Indicates whether to skip validation before deletion.</param>
+    /// <param name="skipValidation">When <see langword="true"/>, queues deletion without first retrieving the user.</param>
     /// <param name="cancellationToken">Token used to cancel the operation.</param>
-    /// <returns>A task that completes after the targeted files have been deleted.</returns>
+    /// <returns>A task that completes when deletion has been accepted by the background queue.</returns>
     ValueTask Delete(string id, bool skipValidation = false, CancellationToken cancellationToken = default);
 }
