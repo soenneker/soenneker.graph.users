@@ -2,8 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
-using Polly;
-using Polly.Retry;
+using Kevlar;
 using Soenneker.Exceptions.Suite;
 using Soenneker.Extensions.Configuration;
 using Soenneker.Extensions.Enumerable;
@@ -39,12 +38,11 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
         "userPrincipalName"
     ];
 
-    private static readonly AsyncRetryPolicy _retry = Policy.Handle<Exception>(ex =>
-                                                                    ex is not OperationCanceledException &&
-                                                                    ex is not Microsoft.Graph.Models.ODataErrors.ODataError { ResponseStatusCode: 404 })
-                                                            .WaitAndRetryAsync(retryCount: 3,
-                                                                sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
-                                                                                                  TimeSpan.FromMilliseconds(RandomUtil.Next(0, 500)));
+    private static readonly Shield _retry = Shield.When<Exception>(static ex =>
+                                                        ex is not OperationCanceledException &&
+                                                        ex is not Microsoft.Graph.Models.ODataErrors.ODataError {ResponseStatusCode: 404})
+                                                   .Retry(3, Backoff.Custom(static attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)) +
+                                                       TimeSpan.FromMilliseconds(RandomUtil.Next(0, 500))));
 
     public GraphUsersUtil(IConfiguration config, ILogger<GraphUsersUtil> logger, IBackgroundQueue backgroundQueue, IGraphClientUtil graphClientUtil)
     {
@@ -167,8 +165,8 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
 
         try
         {
-            user = await _retry.ExecuteAsync(async () => await InternalGet(id, cancellationToken)
-                                   .NoSync())
+            user = await _retry.ExecuteAsync(async token => await InternalGet(id, token)
+                                   .NoSync(), cancellationToken)
                                .NoSync();
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError e) when (e.ResponseStatusCode == 404)
