@@ -21,6 +21,7 @@ using System.Threading.Tasks;
 
 namespace Soenneker.Graph.Users;
 
+/// <inheritdoc cref="IGraphUsersUtil" />
 public sealed class GraphUsersUtil : IGraphUsersUtil
 {
     private readonly IConfiguration _config;
