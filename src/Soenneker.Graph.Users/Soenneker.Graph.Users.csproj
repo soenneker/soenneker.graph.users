@@ -48,6 +48,6 @@
         <PackageReference Include="Soenneker.Exceptions.Suite" Version="4.0.691" />
         <PackageReference Include="Soenneker.Extensions.Enumerable" Version="4.0.658" />
         <PackageReference Include="Soenneker.Graph.Client" Version="4.0.1741" />
-        <PackageReference Include="Soenneker.Utils.BackgroundQueue" Version="4.0.2479" />
+        <PackageReference Include="Soenneker.Utils.BackgroundQueue" Version="4.0.2480" />
     </ItemGroup>
 </Project>
