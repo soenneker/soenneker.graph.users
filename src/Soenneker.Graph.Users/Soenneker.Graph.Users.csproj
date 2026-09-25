@@ -48,7 +48,7 @@
         <PackageReference Include="Kevlar" Version="1.1.1" />
         <PackageReference Include="Soenneker.Exceptions.Suite" Version="4.0.694" />
         <PackageReference Include="Soenneker.Extensions.Enumerable" Version="4.0.669" />
-        <PackageReference Include="Soenneker.Graph.Client" Version="4.0.1768" />
+        <PackageReference Include="Soenneker.Graph.Client" Version="4.0.1769" />
         <PackageReference Include="Soenneker.Utils.BackgroundQueue" Version="4.0.2513" />
     </ItemGroup>
     <ItemGroup>
