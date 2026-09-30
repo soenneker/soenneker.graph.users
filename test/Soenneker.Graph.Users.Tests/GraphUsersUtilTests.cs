@@ -25,7 +25,7 @@ public class GraphUsersUtilTests : HostedUnitTest
     }
 
     [Test]
-    public async Task Scoped_utility_keeps_graph_client_singleton()
+    public async ValueTask Scoped_utility_keeps_graph_client_singleton()
     {
         var services = new ServiceCollection();
 
