@@ -5,6 +5,7 @@ using Soenneker.Graph.Client.Abstract;
 using Soenneker.Graph.Users.Abstract;
 using Soenneker.Graph.Users.Registrars;
 using Soenneker.Tests.HostedUnit;
+using System.Threading;
 
 namespace Soenneker.Graph.Users.Tests;
 
@@ -25,7 +26,7 @@ public class GraphUsersUtilTests : HostedUnitTest
     }
 
     [Test]
-    public async ValueTask Scoped_utility_keeps_graph_client_singleton()
+    public async ValueTask Scoped_utility_keeps_graph_client_singleton(CancellationToken cancellationToken)
     {
         var services = new ServiceCollection();
 
