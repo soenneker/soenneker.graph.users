@@ -87,7 +87,7 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
                 new ObjectIdentity
                 {
                     SignInType = "emailAddress",
-                    Issuer = _config.GetValueStrict<string>("Azure:AzureAd:NonCustomDomain"),
+                    Issuer = _config.GetStringStrict("Azure:AzureAd:NonCustomDomain"),
                     IssuerAssignedId = email
                 }
             ],
