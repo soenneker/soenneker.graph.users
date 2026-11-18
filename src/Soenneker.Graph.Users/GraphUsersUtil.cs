@@ -68,7 +68,8 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
         if (password.IsNullOrEmpty())
             throw new ArgumentException("^^ GRAPHUSERUTIL: Password cannot be null or empty", nameof(password));
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Creating user {email} ...", email);
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("^^ GRAPHUSERUTIL: Creating user {email} ...", email);
 
         var user = new User
         {
@@ -172,7 +173,8 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
         }
         catch (Microsoft.Graph.Models.ODataErrors.ODataError e) when (e.ResponseStatusCode == 404)
         {
-            _logger.LogDebug("^^ GRAPHUSERUTIL: User ({id}) was not found", id);
+            if (_logger.IsEnabled(LogLevel.Debug))
+                _logger.LogDebug("^^ GRAPHUSERUTIL: User ({id}) was not found", id);
             return null;
         }
         catch (Exception e)
@@ -181,13 +183,15 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
             throw;
         }
 
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved user ({id})", id);
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieved user ({id})", id);
         return user;
     }
 
     private async ValueTask<User?> InternalGet(string id, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({id}) ...", id);
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({id}) ...", id);
 
         User? user = await (await _graphClientUtil.Get(cancellationToken)
                                                   .NoSync()).Users[id]
@@ -265,7 +269,8 @@ public sealed class GraphUsersUtil : IGraphUsersUtil
     // TODO: Probably a way to grab the user via userPrincipalName instead of filtering on identities
     public async ValueTask<User?> GetByEmail(string email, CancellationToken cancellationToken = default)
     {
-        _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({email}) ...", email);
+        if (_logger.IsEnabled(LogLevel.Debug))
+            _logger.LogDebug("^^ GRAPHUSERUTIL: Retrieving user ({email}) ...", email);
         string escapedEmail = email.Replace("'", "''", StringComparison.Ordinal);
 
         UserCollectionResponse? getUserResponse = await (await _graphClientUtil.Get(cancellationToken)
