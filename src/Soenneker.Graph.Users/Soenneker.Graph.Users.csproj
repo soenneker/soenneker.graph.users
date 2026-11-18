@@ -51,7 +51,7 @@
         <PackageReference Include="Soenneker.Extensions.Enumerable" Version="11.0.703" />
         <PackageReference Include="Soenneker.Extensions.String" Version="11.0.824" />
         <PackageReference Include="Soenneker.Graph.Client" Version="11.0.1826" />
-        <PackageReference Include="Soenneker.Utils.BackgroundQueue" Version="11.0.2556" />
+        <PackageReference Include="Soenneker.Utils.BackgroundQueue" Version="11.0.2558" />
     </ItemGroup>
     <ItemGroup>
     </ItemGroup>
